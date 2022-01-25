@@ -1,8 +1,11 @@
+#coding=utf-8
+from __future__ import division
 import subprocess
 import math
 import sys
 import time
 from loaders import *
+from acc import *
 
 def extract(sinste):
     #sinste: list of packet sizes
@@ -127,8 +130,8 @@ def dist(cell1, cell2):
 try:
     optfname = sys.argv[1]
     d = load_options(optfname)
-except Exception,e:
-    print sys.argv[0], str(e)
+except Exception as e:
+    print(sys.argv[0], str(e))
     sys.exit(0)
 
 ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Pa-CUMUL", d["CORE_NAME"])
@@ -136,23 +139,24 @@ logfname = ofname + ".log"
 flog(" " + sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
 flog(repr(d), logfname)
 
-[tpc, tnc, nc, pc] = [0, 0, 0, 0]
+[tpc, wpc,fpc,fnc,tnc, pc, nc] = [0,0 ,0,0, 0, 0, 0]
 
 trainnames, testnames = get_list(d)
+print(len(trainnames),len(testnames))
 
 skipext = 0
 if "DO_NOT_EXTRACT" in d:
     if d["DO_NOT_EXTRACT"] == 1:
         skipext = 1
 if (skipext == 0):
-    print "Extracting features..."
+    print("Extracting features...")
     #extract features
     fullnames = [trainnames, testnames]
     fullexts = [ofname + ".train", ofname + ".test"]
     for type_i in range(0, 2):
         fout = open(fullexts[type_i], "w")
         for ci in range(0, len(fullnames[type_i])):
-            print "Site {} of {}".format(ci, len(fullnames[type_i]))
+            print("Site {} of {}".format(ci, len(fullnames[type_i])))
             for ti in range(0, len(fullnames[type_i][ci])):
                 cells = load_cell(fullnames[type_i][ci][ti])
                 feats = extract(cells)
@@ -167,16 +171,14 @@ if (skipext == 0):
     SVM_C = math.pow(2.0, d["SVM_C_LOG"])
     SVM_G = math.pow(2.0, d["SVM_G_LOG"])
 
-    print "Start training..."
-    cmd = "./svm-train -c {1} -g {2} {0}.train {0}.model".format(
-        ofname, SVM_C, SVM_G)
+    print("Start training...")
+    cmd = "./svm-train -c {1} -g {2} {0}.train {0}.model".format(ofname, SVM_C, SVM_G)
     subprocess.call(cmd, shell=True)
 
 if os.path.isfile(ofname + ".conf"):
     os.remove(ofname + ".conf")
-print "Start testing..."
-cmd = "./svm-predict -o {0}.conf {0}.test {0}.model {0}.svmlog".format(
-    ofname)
+print("Start testing...")
+cmd = "./svm-predict -o {0}.conf {0}.test {0}.model {0}.svmlog".format(ofname)
 subprocess.call(cmd, shell=True)
 
 #parse confname for score
@@ -192,7 +194,7 @@ for line in lines:
     testname = testnames[site][inst]
     logmsg = testname
     li = line.split(" ")[:-1]
-##    print li
+    # print li
     class_probs = [] #class_probs[i] is the score of class i for this sinste
     for t in range(0, len(li)):
         class_probs.append(float(li[t]))
@@ -203,6 +205,13 @@ for line in lines:
             tnc += 1
         else:
             tpc += 1
+    else:
+        if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0: #non-monitored
+            fpc += 1
+        elif site != len(testnames) - 1 and gs != len(testnames) - 1:
+            wpc += 1
+        else:
+            fnc += 1
     if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0:
         nc += 1
     else:
@@ -214,5 +223,21 @@ for line in lines:
         inst = 0
 sout.close()
 
-print "TPR:" + str(tpc) + "/" + str(pc)
-print "TNR:" + str(tnc) + "/" + str(nc)
+
+acc = [tpc, wpc, fpc, pc, nc]
+# r = (d['OPEN_INSTNUM']+d['CLOSED_INSTNUM']*d['CLOSED_SITENUM'])/d['CLOSED_SITENUM']
+pr1 = acc_to_pr(acc,1)
+pr20 = acc_to_pr(acc,20)
+pr1000 = acc_to_pr(acc,1000)
+recall = acc_to_recall(acc)
+print('tpc wpc fpc fnc tnc pc nc r pr pro recall')
+rst = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(tpc, wpc,fpc,fnc,tnc, pc, nc,pr1,pr20,pr1000,recall)
+print(rst.replace('\t',' '))
+# print("Recall = TPR:" + str(tpc) + "/" + str(pc)+ " = " + str(tpc/pc) )
+# print("TNR:" + str(tnc) + "/" + str(nc)+ " = " + str(tnc/nc) )
+# print("TPR:" + str(tpc) + "/" + str(pc)+ " = " + str(tpc/pc) )
+# print("TNR:" + str(tnc) + "/" + str(nc)+ " = " + str(tnc/nc) )
+
+rstf = open(ofname[:-2] + ".rst", "a+")
+rstf.write(str(d["CORE_NAME"])+'\t'+rst)
+rstf.close()

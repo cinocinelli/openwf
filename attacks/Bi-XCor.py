@@ -1,3 +1,5 @@
+#coding=utf-8
+from __future__ import division
 import subprocess
 import math
 import time
@@ -5,8 +7,8 @@ import numpy
 import sys
 import os
 from loaders import *
-
-
+from acc import *
+# calculates cross-correlation
 def cc(p, q):
     if (len(p) == 0 or len(q) == 0):
         return 0
@@ -69,19 +71,27 @@ def dist(cell1, cell2):
 
 try:
     d = load_options(sys.argv[1])
-except Exception,e:
-    print sys.argv[0], str(e)
+except Exception as e:
+    print(sys.argv[0], str(e))
     sys.exit(0)
 
-ofname = ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Bi-XCor", d["CORE_NAME"])
+ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Bi-XCor", d["CORE_NAME"])
+print(ofname)
 logfname = ofname + ".log"
 
 flog(" " + sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
 flog(repr(d), logfname)
 
-[tpc, tnc, pc, nc] = [0, 0, 0, 0]
-trainnames, testnames = get_list(d)
+# pc :  Sensitive class = TP + WP + FN
+# nv :  Non-sensitive class =FP + TN
+[tpc, wpc,fpc,fnc,tnc, pc, nc] = [0,0 ,0,0, 0, 0, 0]
+# [tpc, tnc,wpc,fnc, pc, nc] = [0 , 0, 0, 0]
 
+trainnames, testnames = get_list(d)
+print(len(trainnames),len(testnames))
+# print(trainnames)
+# print('-----------------------')
+# print(testnames)
 ##fullnames = trainnames + testnames
 
 ##distloc = d["OUTPUT_LOC"] + sys.argv[0].split("/")[-1] + ".dist"
@@ -109,7 +119,7 @@ trainnames, testnames = get_list(d)
 
 class_ms = []
 for site in range(0, len(trainnames)):
-    print "Training site %d of %d" %(site, len(trainnames))
+    print("Training site %d of %d" %(site, len(trainnames)))
     iptime_means = [] #iptime_means[n] is the mean iptime between cell n-1 and n for pseqs of this site
     plen_means = []
     cell_counts = []
@@ -135,10 +145,10 @@ for site in range(0, len(trainnames)):
     class_ms.append([iptime_means, plen_means])
 
 #Testing:
-print "Writing to {}.score".format(ofname)
+print("Writing to {}.score".format(ofname))
 sout = open(ofname + ".score", "w")
 for site in range(0, len(testnames)):
-    print "Testing site %d of %d" %(site, len(testnames))
+    print("Testing site %d of %d" %(site, len(testnames)))
     for inst in range(0, len(testnames[site])):
         testname = testnames[site][inst]
         logmsg = testname
@@ -149,11 +159,19 @@ for site in range(0, len(testnames)):
             logmsg += "\t{}".format(class_probs[t])
         gs = class_probs.index(max(class_probs))
 
+        # print(site,gs)
         if site == gs:
             if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0: #non-monitored
                 tnc += 1
             else:
                 tpc += 1
+        else:
+            if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0: #non-monitored
+                fpc += 1
+            elif site != len(testnames) - 1 and gs != len(testnames) - 1:
+                wpc += 1
+            else:
+                fnc += 1
         if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0:
             nc += 1
         else:
@@ -167,6 +185,20 @@ sout.close()
 
 ##log("Training time" + "\t" + str(traintime))
 ##log("Testing time" + "\t" + str(testtime))
-print "TPR:" + str(tpc) + "/" + str(pc)
-print "TNR:" + str(tnc) + "/" + str(nc)
-        
+
+acc = [tpc, wpc, fpc, pc, nc]
+# r = (d['OPEN_INSTNUM']+d['CLOSED_INSTNUM']*d['CLOSED_SITENUM'])/d['CLOSED_SITENUM']
+pr1 = acc_to_pr(acc,1)
+pr20 = acc_to_pr(acc,20)
+pr1000 = acc_to_pr(acc,1000)
+recall = acc_to_recall(acc)
+print('tpc wpc fpc fnc tnc pc nc r pr pro recall')
+rst = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(tpc, wpc,fpc,fnc,tnc, pc, nc,pr1,pr20,pr1000,recall)
+print(rst.replace('\t',' '))
+# print("Recall = TPR:" + str(tpc) + "/" + str(pc)+ " = " + str(tpc/pc) )
+# print("TNR:" + str(tnc) + "/" + str(nc)+ " = " + str(tnc/nc) )
+
+
+rstf = open(ofname[:-2] + ".rst", "a+")
+rstf.write(str(d["CORE_NAME"])+'\t'+rst)
+rstf.close()

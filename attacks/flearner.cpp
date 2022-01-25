@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <algorithm>
 #include <map>
+
 //#include "loader.h"
 using namespace std;
 
@@ -257,9 +258,14 @@ void accuracy(float** trainfeat, float** testfeat, int* trainfeatclasses, int* t
 
 	int tp = 0;
 	int fp = 0;
+	int wp = 0;
+	int tn = 0;
+	int fn = 0;
 	int p = 0;
 	int n = 0;
-
+	double OPEN_INSTNUM = atof(d["OPEN_INSTNUM"].c_str());
+	double CLOSED_INSTNUM = atof(d["CLOSED_INSTNUM"].c_str());
+	double CLOSED_SITENUM = atof(d["CLOSED_SITENUM"].c_str());
 	//log the match score of each class
 	FILE * flog;
 	string fname;
@@ -272,7 +278,7 @@ void accuracy(float** trainfeat, float** testfeat, int* trainfeatclasses, int* t
 		
 
 		map<int, int> classlist;
-		printf("\rComputing accuracy... %d (%d-%d)", is, 0, testlen);
+		printf("\rComputing accuracy... %d (%d-%d)\n", is, 0, testlen);
 		fflush(stdout);
 		for (int at = 0; at < trainlen; at++) {
 			distlist[at] = dist(testfeat[is], trainfeat[at], weight);
@@ -320,15 +326,52 @@ void accuracy(float** trainfeat, float** testfeat, int* trainfeatclasses, int* t
 		if (hasconsensus <= 0) {
 			guessclass = -1;
 		}
-		if (guessclass != -1) {
+		/*
+		if (guessclass != -1) {   //gs = sen
 			if (trueclass == guessclass) tp += 1;
-			else fp += 1;
+			else fp += 1; //!!!wrong
+		}
+		*/
+	    if (guessclass != -1) {   //gs = sen
+			if (trueclass == guessclass) tp += 1;
+			else{
+				if(trueclass!=-1){
+					wp+=1;
+				}
+				else{
+					fp +=1;
+				}
+
+			}
+		}
+		else{                     //gs = non-sen
+			if (trueclass == guessclass) tn += 1;
+			else fn += 1;
 		}
 		if (trueclass == -1) n += 1;
 		else p += 1;
-		printf("%d %d %d %d\n", tp, fp, p, n);
+		
+		
+		
+		
 	}
 
+	// double r = (OPEN_INSTNUM+CLOSED_SITENUM*CLOSED_INSTNUM) / CLOSED_SITENUM;
+	double tpr = static_cast<double>(tp)/static_cast<double>(p);
+    double wpr = static_cast<double>(wp)/static_cast<double>(p);
+    double fpr = static_cast<double>(fp)/static_cast<double>(n);
+	double pr1 = tpr/(tpr+wpr+fpr);
+	double pr20 = tpr/(tpr+wpr+20*fpr);
+	double pr1000 = tpr/(tpr+wpr+1000*fpr);
+	double recall = tpr;
+	// double prorg = static_cast<double>(tp)/(static_cast<double>(tp)+static_cast<double>(wp)+static_cast<double>(fp));
+
+	printf(" tp:%d wp:%d fp:%d fn:%d tn:%d p:%d n:%d pr1:%lf pr20:%lf pr1000:%lf recall:%lf\n",tp, wp,fp,fn,tn, p, n,pr1,pr20,pr1000,recall);
+
+	ofstream outfile("./output/Wa-kNN.rst", ios::app);
+	outfile.precision(10);
+	outfile <<d["CORE_NAME"]<<'\t'<< tp <<'\t'<< wp << '\t' << fp << '\t' << fn << '\t'<< tn << '\t' << p <<'\t' << n  << '\t'  << pr20 << '\t'  << pr1000 << '\t' << recall<< endl;
+	outfile.close();
 	fclose(flog);
 
 	printf("\n");

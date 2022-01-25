@@ -2,11 +2,11 @@ import subprocess, sys, time, os
 from loaders import *
 #run-Ca-OSAD.py calls this
 
-##cmd = "rm WaOSAD-small-0.lev"
-##subprocess.call(cmd, shell=True)
+# cmd = "rm WaOSAD-small-0.lev"
+# subprocess.call(cmd, shell=True)
 
-##cmd = "./clLev 2 0 " + str(optfname) + " WaOSAD-small-0.lev 0 1"
-##subprocess.call(cmd, shell=True)
+# cmd = "./clLev 2 0 " + str(optfname) + " WaOSAD-small-0.lev 0 1"
+# subprocess.call(cmd, shell=True)
 
 def CaOSAD(d):
 
@@ -25,18 +25,18 @@ def CaOSAD(d):
     
     check_fail = 0
 
-    print "Checking lev distance files, generated with clLev...",
+    print("Checking lev distance files, generated with clLev...",)
     if (os.path.isfile(fname + ".lev")):
-        print " YES"
+        print(" YES")
     else:
-        print " NO"
+        print(" NO")
         check_fail = 1
         
-    print "Checking matrix files, generated with clgen_stratify...",
+    print("Checking matrix files, generated with clgen_stratify...",)
     if (os.path.isfile(fname + "-" + str(d["FOLD_NUM"]) + ".matrix")):
-        print " YES"
+        print(" YES")
     else:
-        print " NO"
+        print(" NO")
         check_fail = 1
 
     if (check_fail == 1):
@@ -54,14 +54,14 @@ def CaOSAD(d):
         subprocess.call(cmd, shell=True)
 
     SVM_C = 1024
-    print "Start training..."
+    print("Start training...")
     cmd = "./svm-train -h 0 -t 4 -c {} {} {}".format(
         SVM_C, fname + ".train", fname + ".model")
     subprocess.call(cmd, shell=True)
 
     if os.path.isfile("svm-conf.results"):
         os.remove("svm-conf.results")
-    print "Start testing..."
+    print("Start testing...")
     cmd = "./svm-predict -o svm-conf.results {0}{1} {0}{2} {0}{3}".format(
         fname, ".test", ".model", ".svmlog")
     subprocess.call(cmd, shell=True)

@@ -19,13 +19,13 @@ def extract(times, sizes, features):
     features.append(times[-1] - times[0])
 
     #Unique packet lengths
-##    for i in range(-1500, 1501):
-##        if i in sizes:
-##            features.append(1)
-##        else:
-##            features.append(0)
+    # for i in range(-1500, 1501):
+    #    if i in sizes:
+    #        features.append(1)
+    #    else:
+    #        features.append(0)
 
-    #Transpositions (similar to good distance scheme)
+    # Transpositions (similar to good distance scheme)
     count = 0
     for i in range(0, len(sizes)):
         if sizes[i] > 0:
@@ -86,7 +86,7 @@ def extract(times, sizes, features):
         features.append("X")
         features.append("X")
         features.append("X")
-##    print bursts
+    #print bursts
     counts = [0, 0, 0, 0, 0, 0]
     for x in bursts:
         if x > 2:
@@ -137,8 +137,8 @@ def flog(msg, fname):
 try:
     optfname = sys.argv[1]
     d = load_options(optfname)
-except Exception,e:
-    print sys.argv[0], str(e)
+except Exception as e:
+    print(sys.argv[0], str(e))
     sys.exit(0)
 
 flist = []
@@ -149,10 +149,10 @@ for s in range(0, d["CLOSED_SITENUM"]):
 for i in range(0, d["OPEN_INSTNUM"]):
     flist.append("{}{}.cell".format(fold, i))
 
-print "fextractor.py: Extracting features"
+print("fextractor.py: Extracting features")
 for fname in flist:
     if "-0.cell" in fname:
-        print fname
+        print(fname)
     tname = fname + "kNN"
 
     #load up times, sizes

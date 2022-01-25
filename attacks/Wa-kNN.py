@@ -1,17 +1,23 @@
+#coding=utf-8
+from __future__ import division
 import subprocess
 import sys
 import time
 from loaders import *
         
+
+
 try:
+    # 命令行传参接收option文件名
     optfname = sys.argv[1]
     d = load_options(optfname)
     ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Wa-kNN", d["CORE_NAME"])
-except Exception,e:
-    print sys.argv[0], str(e)
+except Exception as e:
+    print(sys.argv[0], str(e))
     sys.exit(0)
 
 logfname = ofname + ".log"
+# 生成日志文件
 flog(sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
 flog(repr(d), logfname)
 

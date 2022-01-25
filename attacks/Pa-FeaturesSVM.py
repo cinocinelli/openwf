@@ -1,8 +1,12 @@
+#coding=utf-8
+from __future__ import division
 import subprocess
 import math
 import sys
 import time
 from loaders import *
+from acc import *
+import multiprocessing
 
 ##for c_i in range(0, 10):
 ##    for g_i in range(0, 10):
@@ -143,8 +147,8 @@ def dist(cell1, cell2):
 try:
     optfname = sys.argv[1]
     d = load_options(optfname)
-except Exception,e:
-    print sys.argv[0], str(e)
+except Exception as e:
+    print(sys.argv[0], str(e))
     sys.exit(0)
 
 ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Pa-FeaturesSVM", d["CORE_NAME"])
@@ -152,23 +156,44 @@ logfname = ofname + ".log"
 flog(sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
 flog(repr(d), logfname)
 
-[tpc, tnc, nc, pc] = [0, 0, 0, 0]
+# [tpc, tnc, nc, pc] = [0, 0, 0, 0]
+[tpc, wpc,fpc,fnc,tnc, pc, nc] = [0,0 ,0,0, 0, 0, 0]
 
 trainnames, testnames = get_list(d)
+print(len(trainnames),len(testnames))
+
+# def dealsite(fullnames,fullexts,type_i):
+    
+#     fout = open(fullexts[type_i], "w")
+#     for ci in range(0, len(fullnames[type_i])):
+#         # pool.apply_async(dealsite,(ci,fullnames[type_i],fout))
+#         print("Site {} of {}".format(ci, len(fullnames[type_i])))
+#         for ti in range(0, len(fullnames[type_i][ci])):
+#             cells = load_cell(fullnames[type_i][ci][ti])
+#             feats = extract(cells)
+#             fout.write(str(ci))
+#             for fi in range(0, len(feats)):
+#                 fout.write(" " + str(fi+1) + ":" + str(feats[fi]))
+#             fout.write("\n")
+#     fout.close()
+
 
 skipext = 0
 if "DO_NOT_EXTRACT" in d:
     if d["DO_NOT_EXTRACT"] == 1:
         skipext = 1
 if (skipext == 0):
-    print "Extracting features..."
+    print("Extracting features...")
     #extract features
     fullnames = [trainnames, testnames]
     fullexts = [ofname + ".train", ofname + ".test"]
+    pool = multiprocessing.Pool(16)
     for type_i in range(0, 2):
+        # pool.apply_async(dealsite,(fullnames,fullexts,type_i))
         fout = open(fullexts[type_i], "w")
         for ci in range(0, len(fullnames[type_i])):
-            print "Site {} of {}".format(ci, len(fullnames[type_i]))
+            # pool.apply_async(dealsite,(ci,fullnames[type_i],fout))
+            print("Site {} of {}".format(ci, len(fullnames[type_i])))
             for ti in range(0, len(fullnames[type_i][ci])):
                 cells = load_cell(fullnames[type_i][ci][ti])
                 feats = extract(cells)
@@ -176,25 +201,30 @@ if (skipext == 0):
                 for fi in range(0, len(feats)):
                     fout.write(" " + str(fi+1) + ":" + str(feats[fi]))
                 fout.write("\n")
+        
         fout.close()
+    # pool.close()
+    # pool.join()
     if not("SVM_C_LOG" in d and "SVM_G_LOG" in d):
-        d["SVM_C_LOG"] = 10
-        d["SVM_G_LOG"] = -25
+        # d["SVM_C_LOG"] = 10
+        # d["SVM_G_LOG"] = -25
+        d["SVM_C_LOG"] = 16
+        d["SVM_G_LOG"] = -28
     SVM_C = math.pow(2.0, d["SVM_C_LOG"])
     SVM_G = math.pow(2.0, d["SVM_G_LOG"])
 
-    print "Start training..."
-    cmd = "./svm-train -c {1} -g {2} {0}.train {0}.model".format(
+    print("Start training...")
+    cmd = "./svm-train -c {1} -h 0 -g {2} {0}.train {0}.model".format(
         ofname, SVM_C, SVM_G)
-    subprocess.call(cmd, shell=True)
-
+    subprocess.call(cmd, shell=True,close_fds=True)
+    # p.wait()
 if os.path.isfile(ofname + ".conf"):
     os.remove(ofname + ".conf")
-print "Start testing..."
+print("Start testing...")
 cmd = "./svm-predict -o {0}.conf {0}.test {0}.model {0}.svmlog".format(
     ofname)
-subprocess.call(cmd, shell=True)
-
+subprocess.call(cmd, shell=True,close_fds=True)
+# pt.wait()
 #parse confname for score
 
 f = open(ofname + ".conf", "r")
@@ -219,6 +249,14 @@ for line in lines:
             tnc += 1
         else:
             tpc += 1
+    else:
+        if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0: #non-monitored
+            fpc += 1
+        else:
+            if site != len(testnames) - 1 and gs != len(testnames) - 1:
+                wpc += 1
+            else:
+                fnc += 1
     if site == len(testnames) - 1 and d["OPEN_INSTNUM"] != 0:
         nc += 1
     else:
@@ -230,5 +268,22 @@ for line in lines:
         inst = 0
 sout.close()
 
-print "TPR:" + str(tpc) + "/" + str(pc)
-print "TNR:" + str(tnc) + "/" + str(nc)
+# print("TPR:" + str(tpc) + "/" + str(pc)+ " = " + str(tpc/pc) )
+# print("TNR:" + str(tnc) + "/" + str(nc)+ " = " + str(tnc/nc) )
+
+acc = [tpc, wpc, fpc, pc, nc]
+# r = (d['OPEN_INSTNUM']+d['CLOSED_INSTNUM']*d['CLOSED_SITENUM'])/d['CLOSED_SITENUM']
+pr1 = acc_to_pr(acc,1)
+pr20 = acc_to_pr(acc,20)
+pr1000 = acc_to_pr(acc,1000)
+recall = acc_to_recall(acc)
+print('tpc wpc fpc fnc tnc pc nc r pr pro recall')
+rst = "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(tpc, wpc,fpc,fnc,tnc, pc, nc,pr1,pr20,pr1000,recall)
+print(rst.replace('\t',' '))
+# print("Recall = TPR:" + str(tpc) + "/" + str(pc)+ " = " + str(tpc/pc) )
+# print("TNR:" + str(tnc) + "/" + str(nc)+ " = " + str(tnc/nc) )
+
+
+rstf = open(ofname[:-2] + ".rst", "a+")
+rstf.write(str(d["CORE_NAME"])+'\t'+rst)
+rstf.close()

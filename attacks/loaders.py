@@ -1,6 +1,9 @@
+#coding=utf-8
 import sys
 import os
 import time
+import dill
+import pprint
 
 def str_to_sinste(fname):
     #given a file name fold/X-Y.xxx or fold/Z.xxx, returns (site, inst)
@@ -58,6 +61,7 @@ def load_dill(fname, d):
     #loads dill and also separates the data into the right sets
     #very dependent on write_dill logic in the middle (to save time)
     f = open(fname, "r")
+    # 反序列化加载
     dillset = dill.load(f)
     f.close()
 
@@ -71,7 +75,7 @@ def load_dill(fname, d):
     oend = dillset["OPEN_INSTEND"]
 
     if fname != get_dillname(dillset):
-        print "load_dill warning: expected input {}, got {}".format(get_dillname(d), fname)
+        print("load_dill warning: expected input {}, got {}".format(get_dillname(d), fname))
 
     foldnum = d["FOLD_NUM"]
     foldtotal = 10
@@ -111,7 +115,7 @@ def write_dill(fname, data, names, d):
     #do some critical sanity checks
 
     if fname != get_dillname(d):
-        print "write_dill warning: expected output {}, got {}".format(get_dillname(d), fname)
+        print("write_dill warning: expected output {}, got {}".format(get_dillname(d), fname))
 
     if "CLOSED_SITESTART" in d.keys():
         cstart = d["CLOSED_SITESTART"]
@@ -139,8 +143,8 @@ def write_dill(fname, data, names, d):
     for i in range(0, len(names)):
         [rs, ri] = str_to_sinste(names[i])
         if ([rs, ri] != [es, ei]):
-            print "write_dill error: name not in order, aborting"
-            print "Got {}-{}, expected {}-{}".format(rs, ri, es, ei)
+            print("write_dill error: name not in order, aborting")
+            print("Got {}-{}, expected {}-{}".format(rs, ri, es, ei))
             sys.exit(-1)
         ei += 1
         if (ei == cinst and es != -1):
@@ -204,13 +208,12 @@ def load_cell(fname, time=0, ext=".cell"):
                     if l == "-1":
                         burst[1] += 1
                 data.append(burst)
-
         if ext == ".pairs":
             #data is like: [[3, 12], [1, 24]]
             #not truly implemented
             data = list(lines[0])            
     except:
-        print "Could not load", fname
+        print("Could not load", fname)
         sys.exit(-1)
     return data
 
@@ -265,8 +268,7 @@ def load_set(d, site=-1, inst=-1, time=0, ext=".cell"):
 
 def load_all(CLOSED_SITENUM, CLOSED_INSTNUM, OPEN_INSTNUM, INPUT_LOC, time=0):
     #deprecated; do not call
-    print "deprecated: call load_set"
-    sys.exit(0)
+    print("deprecated: call load_set")
 
 def load_log(fname):
     #reads the last two lines for tpc/tnc/pc/nc
@@ -285,7 +287,7 @@ def load_log(fname):
         nc = int(tnrline.split("/")[1])
         return [tpc, tnc, pc, nc]
     return -1
-
+# 垃圾函数
 def load_score(fname):
     #reads the last lines for match value of each instance
     #note that data and names is flattened, unlike load_list
@@ -321,7 +323,7 @@ def load_dist(fname):
     names = []
     dist = []
     if len(lines) > 30000:
-        a = raw_input("Number of lines = {}. Abort (y)?\n".format(len(lines)))
+        a = input("Number of lines = {}. Abort (y)?\n".format(len(lines)))
         if (a == "y"):
             sys.exit(-1)
     for line_i in range(0, len(lines)):
@@ -419,7 +421,7 @@ def kfold(data, fi, foldtotal):
 ##    return [], datanames
     
 
-
+# 取值函数
 def read_value(string):
     if string[0] == "'" and string[-1] == "'":
         return string[1:-1]
@@ -433,6 +435,7 @@ def read_value(string):
             pass
     return val
 
+# 接收fname参数，按行读取，按文件内容格式，如果是非空行并且第一个字符为'#'则忽略此行，如果没有'#',则按'\t'进行分割(应该是分为了两部分（key : value))，返回一个以字典存储所有键值对的字典
 def load_options(fname):
     d_options = {}
     f = open(fname, "r")
@@ -449,11 +452,13 @@ def load_options(fname):
             d_options[li[0]] = read_value(li[1])
     return d_options
 
+# 日志函数
 def flog(msg, fname):
     f = open(fname, "a+")
     f.write(repr(time.time()) + "\t" + str(msg) + "\n")
     f.close()
 
+# 以key \t value \n 的形式把option内容写入fname文件
 def write_options(fname, d_options):
     other = d_options.keys()
     order = ["CLOSED_SITENUM", "CLOSED_INSTNUM", "OPEN_INSTNUM", "OPEN",
@@ -468,18 +473,18 @@ def write_options(fname, d_options):
     for opt in other:
         f.write(str(opt) + "\t" + str(d_options[opt]) + "\n")
     f.close()
-
+# 写入fanme文件中distance between any two cells和对应的输入文件cellnames
 def write_dist(fname, cellnames, dist, t=1):
     #fname is the target output name
     #cellnames is the list of names of input files coressponding to dist
     #dist is a function callback, calculating the distance between any two cells
     startsite = 0
     startinst = 0
-##    print cellnames
+    #print cellnames
     if os.path.isfile(fname):
         done = 0
         while (done == 0):
-            a = raw_input("dist file already exists. Re-create? y=yes, r=resume, n=skip")
+            a = input("dist file already exists. Re-create? y=yes, r=resume, n=skip")
             if a == "y":
                 os.remove(fname)
                 done = 1
@@ -513,7 +518,7 @@ def write_dist(fname, cellnames, dist, t=1):
             else:
                 rate = 0
                 exp_time = 0
-            print "write_dist {}/{}-{} time left {}".format(site1, len(cellnames), inst1, int(exp_time))
+            print("write_dist {}/{}-{} time left {}".format(site1, len(cellnames), inst1, int(exp_time)))
             count += 1
             dstr = cellnames[site1][inst1] + "\t"
             cell1 = load_cell(cellnames[site1][inst1], time=t)
@@ -617,7 +622,6 @@ def read_mpairs(fname):
         mpairs.append(mpair)
     return mpairs
     
-import pprint
 
 def options_to_string(d_options):
     return pprint.saferepr(d_options)

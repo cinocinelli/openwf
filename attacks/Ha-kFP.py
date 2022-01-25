@@ -6,7 +6,7 @@ import numpy as np
 #import matplotlib.pylab as plt
 import operator
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.cross_validation import cross_val_score
+from sklearn.model_selection import cross_val_score
 from sklearn import metrics
 from sklearn import tree
 import sklearn.metrics as skm
@@ -34,11 +34,11 @@ import subprocess
 def neighborhood(iterable):
     iterator = iter(iterable)
     prev = (0)
-    item = iterator.next()  # throws StopIteration if empty.
-    for next in iterator:
-        yield (prev,item,next)
+    item = next(iterator)  # throws StopIteration if empty.
+    for nex in iterator:
+        yield (prev,item,nex)
         prev = item
-        item = next
+        item = nex
     yield (prev,item,None)
 
 def chunkIt(seq, num):
@@ -61,7 +61,6 @@ def get_pkt_list(trace_data):
     for line in trace_data:
         a = line
         b = a.split("\t")
-
         if float(b[1]) > 0:
             #dta.append(((float(b[0])- first_time), abs(int(b[2])), 1))
             dta.append(((float(b[0])- first_time), 1))
@@ -180,7 +179,7 @@ def first_and_last_30_pkts_stats(trace_data):
 #concentration of outgoing packets in chunks of 20 packets
 def pkt_concentration_stats(trace_data):
     Total = get_pkt_list(trace_data)
-    chunks= [Total[x:x+20] for x in xrange(0, len(Total), 20)]
+    chunks= [Total[x:x+20] for x in range(0, len(Total), 20)]
     concentrations = []
     for item in chunks:
         c = 0
@@ -288,7 +287,9 @@ def perc_inc_out(trace_data):
 #If size information available add them in to function below
 def TOTAL_FEATURES(trace_data, max_size=175):
     #this is called below in extract_dill to extract features
+
     list_data = get_pkt_list(trace_data)
+    
     ALL_FEATURES = []
 
     # ------TIME--------
@@ -373,7 +374,6 @@ def TOTAL_FEATURES(trace_data, max_size=175):
 
     ALL_FEATURES.extend(per_sec)
 
-
     while len(ALL_FEATURES)<max_size:
         ALL_FEATURES.append(0)
     features = ALL_FEATURES[:max_size]
@@ -391,7 +391,7 @@ def checkequal(lst):
 
 ############ Non-Feeder functions ########
 
-def extract_dill(trainnames, testnames, ofname):
+def extract_dill(trainnames, testnames, ofname, d):
     '''Extract Features -- A dictionary containing features for each traffic instance.'''
 
     data_dict = {'train_feature': [],
@@ -399,104 +399,119 @@ def extract_dill(trainnames, testnames, ofname):
                  'test_feature': [],
                  'test_label': []}
 
-    print "Creating training features...", len(trainnames)
+    print("Creating training features...", len(trainnames))
+
+    oload_multi = 0
+    if "LOAD_MULTI" in d.keys():
+        if d["LOAD_MULTI"] == 1:
+            oload_multi = 1
+            traindata, testdata, trainnames, testnames = load_multi(d)
 
     maxclass = len(trainnames) - 1
     #for kFP, we write the final class not as -1, but as maxclass
     count = 0
     intcount = 0
-    for fname in trainnames:
+
+    rtraindata = []
+    rtrainsinste = []
+    rtestdata = []
+    rtestsinste = []
+    for fname_i in range(len(trainnames)):
+        fname = trainnames[fname_i]
+        print(fname)
         if ((count * 100)/len(trainnames) > (intcount + 1)):
-            print "{}%... {}".format(intcount, fname)
+            print("{}%... {}".format(intcount, fname))
             intcount += 1
         (i, j) = str_to_sinste(fname) #i is the true site, j is the true inst
         if i == -1:
             i = maxclass
-        tcp_dump = open(fname).readlines()
+        if oload_multi == 1:
+            tcp_dump = []
+            for x in traindata[fname]:
+                tcp_dump.append("{}\t{}".format(x[0], x[1]))
+        else:
+            tcp_dump = open(fname).readlines()
         g = []
         g = TOTAL_FEATURES(tcp_dump)
-        data_dict['train_feature'].append(g)
-        data_dict['train_label'].append((i,j))
+        #data_dict['train_feature'].append(g)
+        #data_dict['train_label'].append((i,j))
+
+        rtraindata.append(g)
+        rtrainsinste.append((i, j))
         count += 1
 
-    print "Creating testing features...", len(testnames)
+    print("Creating testing features...", len(testnames))
 
     count = 0
     intcount = 0
-    for fname in testnames:
+    for fname_i in range(len(testnames)):
+        fname = testnames[fname_i]
+        print(fname)
         if ((count * 100)/len(testnames) > (intcount + 1)):
-            print "{}%... {}".format(intcount, fname)
+            print("{}%... {}".format(intcount, fname))
             intcount += 1
         (i, j) = str_to_sinste(fname) #i is the true site, j is the true inst
         if i == -1:
             i = maxclass
-        tcp_dump = open(fname).readlines()
+        if oload_multi == 1:
+            tcp_dump = []
+            for x in testdata[fname]:
+                tcp_dump.append("{}\t{}".format(x[0], x[1]))
+        else:
+            tcp_dump = open(fname).readlines()
         g = []
         g = TOTAL_FEATURES(tcp_dump)
-        data_dict['test_feature'].append(g)
-        data_dict['test_label'].append((i, j))
+        #data_dict['test_feature'].append(g)
+        #data_dict['test_label'].append((i, j))
+
+        rtestdata.append(g)
+        rtestsinste.append((i, j))
         count += 1
 
-    fileObject = open(ofname + ".dill",'wb')
-    dill.dump(data_dict,fileObject)
-    fileObject.close()
 
-def RF_openworld(testnames, ofname):
+    return rtraindata, rtrainsinste, rtestdata, rtestsinste
+    #fileObject = open(ofname + ".dill",'wb')
+    #dill.dump(data_dict,fileObject)
+    #fileObject.close()
+
+def RF_openworld(traindata, trainsinste, testdata, testsinste):
     '''Produces leaf vectors used for classification.'''
-
-    fileObject = open(ofname + ".dill",'r')
-    dic = dill.load(fileObject)
-    fileObject.close()
-    traindata = dic["train_feature"]
-    trainsinste = dic["train_label"]
-    testdata = dic["test_feature"]
-    testsinste = dic["test_label"]
-
     trainlabel = [sinste[0] for sinste in trainsinste]
     testlabel = [sinste[0] for sinste in testsinste]
     
-    print "Training ..."
+    print("Training ...")
     model = RandomForestClassifier(n_jobs=-1, n_estimators=1000, oob_score=True)
     model.fit(traindata, trainlabel)
 
-    #read names from relevant test list
-    if len(testdata) != len(testnames):
-        raise("Unexpected test size: {} != {}".format(len(testdata), len(testnames)))
-
-    #log the match scores
-    sout = open(ofname + ".score", "w")
-    M = model.predict(testdata, get_predict=1)
-    for i in range(0, len(M)):
-        x = M[i]
-        string = str(testnames[i])
-        for xi in x:
-            string += "\t" + str(xi)
-        sout.write(string + "\n")
-    sout.close()
-    
-    print "RF accuracy (open) = ", model.score(testdata, testlabel)
-
-##    train_leaf = zip(model.apply(traindata), trainlabel)
-##    test_leaf = zip(model.apply(testdata), testlabel)
-##    return train_leaf, test_leaf
+    M = model.predict_proba(testdata)
+    print("RF accuracy (open) = ", model.score(testdata, testlabel))
+    return M
         
 try:
     optfname = sys.argv[1]
     d = load_options(optfname)
-except Exception,e:
-    print sys.argv[0], str(e)
+except:
+    print(sys.argv[0], sys.exc_info()[0])
     sys.exit(0)
 
-ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "Ha-kFP", d["CORE_NAME"])
-logfname = ofname + ".log"
-flog(sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
-flog(repr(d), logfname)
+#ofname = "{}{}-{}".format(d["OUTPUT_LOC"], "kFP", d["CORE_NAME"])
+##logfname = ofname + ".log"
+##flog(sys.argv[0] + " " + sys.argv[1], logfname, logtime=1)
+##flog(repr(d), logfname)
 
 atrainnames, atestnames = get_list(d)
 #unpack trainnames, testnames
 trainnames = [name for tname in atrainnames for name in tname]
 testnames = [name for tname in atestnames for name in tname]
+traindata, trainsinste, testdata, testsinste = extract_dill(trainnames, testnames, d["OUTPUT_FILE"], d)
+M = RF_openworld(traindata, trainsinste, testdata, testsinste)
 
-if d["DO_NOT_EXTRACT"] == 0:
-    extract_dill(trainnames, testnames, ofname)
-RF_openworld(testnames, ofname) #testnames is only used to output score here
+#taow: log the match scores
+sout = open(d["OUTPUT_FILE"] + ".res", "a+")
+for i in range(0, len(M)):
+    x = M[i]
+    string = str(testnames[i])
+    for xi in x:
+        string += "\t" + str(xi)
+    sout.write(string + "\n")
+sout.close()
